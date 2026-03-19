@@ -1,25 +1,26 @@
-# ZEC Payroll Runner
+# ZEC Payroll 
 
-A focused hackathon prototype for private payroll with Zcash.
+ZEC Payroll is a small payroll tool for paying teams with private Zcash transactions.
 
-It supports:
-- CSV import for recipients and amounts (`USD`, `USDC`, or `ZEC`)
-- Shielded ZEC batch generation as ZIP-321 multi-payment URI
-- USDC payout lane payload for Zodl NEAR intents
-- Test-transaction gating per recipient before full payout
-- Biweekly schedule preview with next payout date
-- End-to-end encrypted batch storage on server (server never stores plaintext payroll details)
+Upload a CSV, review the batch, run required test payments, then generate a ZIP-321 multi-payment payload for signing in Zodl. If someone needs USDC instead, the app prepares a NEAR intent payload for that leg.
 
-## Run
+## What this demo does
 
-```bash
-npm install
-npm run prisma:generate
-npm run prisma:migrate
-npm run dev
-```
+- Imports payroll rows from CSV (`ZEC`, `USD`, `USDC` amounts)
+- Enforces test-transaction checks before full payout
+- Calculates biweekly payout timing and due status
+- Generates ZIP-321 multi-pay output for ZEC recipients
+- Generates NEAR intent payload for USDC recipients
+- Encrypts payroll batch data in the browser before storing on server
 
-Open `http://localhost:3000`.
+## Product flow
+
+1. Start payroll
+2. Upload CSV (or click **Load Sample CSV**)
+3. Review rows and admin settings
+4. Mark required test tx rows as done
+5. Generate batch
+6. Use ZIP-321 QR/URI for ZEC, NEAR intent for USDC
 
 ## CSV format
 
@@ -31,38 +32,67 @@ Required headers:
 
 Optional headers:
 - `payout_rail` (`ZEC` or `USDC_NEAR_INTENT`)
-- `test_tx_required` (`true`/`false`, defaults to `true`)
+- `test_tx_required` (`true` / `false`, defaults to `true`)
 
 Example:
 
 ```csv
 name,wallet,amount,currency,payout_rail,test_tx_required
-Alice,zs1examplealice,1.25,ZEC,ZEC,true
-Bob,zs1examplebob,125,USD,ZEC,true
-Carol,carol.near,200,USDC,USDC_NEAR_INTENT,false
+Vijay,u1...,100,USD,ZEC,true
+Arjun,zs1...,0.5,ZEC,ZEC,true
+Nina,nina.near,250,USDC,USDC_NEAR_INTENT,false
 ```
 
-## End-to-end encryption model
+## Run locally
 
-- Client derives AES-GCM key from your passphrase using PBKDF2.
-- Client encrypts payroll batch JSON before uploading.
-- Server stores only encrypted payload (`ciphertext`, `iv`, `salt`) + minimal metadata (`createdAt`, `nextPayoutDate`, `notificationDue`) in PostgreSQL.
+```bash
+npm install
+npm run prisma:generate
+npm run prisma:migrate
+npm run dev
+```
+
+Open `http://localhost:3000`.
+
+## Environment
+
+Set either one (both supported):
+
+- `DATABASE_URL`
+- `DB_URL`
+
+Example `.env`:
+
+```env
+DATABASE_URL=postgresql://...
+```
 
 ## Database (Neon + Prisma)
 
-- Connection env vars: `DATABASE_URL` (used by Prisma) and `DB_URL` (kept for compatibility).
 - Prisma schema: `prisma/schema.prisma`
-- Migration files: `prisma/migrations/*`
-- API persistence layer: `app/api/batches/route.ts`
+- Migrations: `prisma/migrations`
+- API storage endpoint: `app/api/batches/route.ts`
 
-Useful commands:
+The server stores encrypted payload fields plus minimal metadata only.
+
+## Encryption model
+
+- Key derivation: PBKDF2 (client-side)
+- Encryption: AES-GCM (client-side)
+- Server storage: ciphertext + IV + salt + schedule metadata
+
+Plaintext payroll rows are not persisted server-side.
+
+## Notes for judges / demo viewers
+
+- ZIP-321 output is generated from CSV rows for multi-recipient ZEC payouts.
+- Wallet support for full multi-pay parsing can vary by scanner implementation.
+- USD/ZEC conversion currently uses a fixed demo rate (`1 ZEC = 50 USD`).
+
+## Useful commands
 
 ```bash
 npm run prisma:generate
 npm run prisma:migrate
+npx tsc --noEmit
 ```
-
-## Notes
-
-- USD/ZEC conversion uses a fixed demo rate (`1 ZEC = 50 USD`).
-- NEAR intent integration is represented as a Zodl-compatible payload URI scaffold for prototype/demo flow.
