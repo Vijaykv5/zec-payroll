@@ -102,14 +102,14 @@ export function ResultStep({
           <PrimaryButton onClick={onCopyZip} disabled={!batch.zcashUri}>
             Copy ZIP-321
           </PrimaryButton>
-          <PrimaryButton onClick={onOpenZip} disabled={!batch.zcashUri}>
+          {/* <PrimaryButton onClick={onOpenZip} disabled={!batch.zcashUri}>
             Open in Zodl
-          </PrimaryButton>
+          </PrimaryButton> */}
         </div>
       </div>
 
       <div className="rounded-xl bg-white p-4 shadow-sm">
-        <h3 className="text-sm font-semibold text-gray-900">USDC via NEAR Intent Payload</h3>
+        <h3 className="text-sm font-semibold text-gray-900">USDC NEAR Intent</h3>
         <textarea
           readOnly
           value={batch.nearIntentJson}

@@ -39,7 +39,7 @@ export function PreviewStep({
       <div className="rounded-xl bg-white p-4 shadow-sm">
         <h2 className="text-lg font-semibold text-gray-900">Payroll Preview</h2>
         <div className="mt-2 grid grid-cols-2 gap-3 text-xs">
-          <SummaryCard label="Total ZEC (rail=ZEC)" value={`${totalZec.toFixed(8)} ZEC`} />
+          <SummaryCard label="Total ZEC" value={`${totalZec.toFixed(8)} ZEC`} />
           <SummaryCard label="Recipients" value={payments.length} />
           <SummaryCard label="Encrypted Batches" value={encryptedBatches} />
           <SummaryCard label="Next Payout" value={nextPayoutDate || "-"} />

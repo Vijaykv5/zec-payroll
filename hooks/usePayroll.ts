@@ -63,35 +63,72 @@ export function usePayroll() {
       return;
     }
 
-    setFileName(file.name);
-    setParseError("");
-    setGenerationError("");
-    setCopyZipState("idle");
-    setCopyNearState("idle");
+    resetUploadState(file.name);
 
     Papa.parse<RawPayment>(file, {
       header: true,
       skipEmptyLines: true,
       complete: (result) => {
-        const parsedPayments = result.data
-          .map((row, index) => parseRawPayment(row, index))
-          .filter((row) => row.name || row.wallet || row.amount > 0);
-
-        if (parsedPayments.length === 0) {
-          setParseError(
-            "No valid rows found. Expected headers: name, wallet, amount, currency, payout_rail, test_tx_required.",
-          );
-          setPayments([]);
-          return;
-        }
-
-        setPayments(parsedPayments);
+        applyParsedRows(result.data);
       },
       error: () => {
         setParseError("Failed to parse CSV file.");
         setPayments([]);
       },
     });
+  }
+
+  async function handleLoadSampleCsv() {
+    resetUploadState("sample_payroll.csv");
+
+    try {
+      const response = await fetch("/sample_payroll.csv", { cache: "no-store" });
+      if (!response.ok) {
+        setParseError("Could not load sample CSV.");
+        setPayments([]);
+        return;
+      }
+
+      const csvText = await response.text();
+      Papa.parse<RawPayment>(csvText, {
+        header: true,
+        skipEmptyLines: true,
+        complete: (result) => {
+          applyParsedRows(result.data);
+        },
+        error: () => {
+          setParseError("Failed to parse sample CSV.");
+          setPayments([]);
+        },
+      });
+    } catch {
+      setParseError("Could not load sample CSV.");
+      setPayments([]);
+    }
+  }
+
+  function resetUploadState(nextFileName: string) {
+    setFileName(nextFileName);
+    setParseError("");
+    setGenerationError("");
+    setCopyZipState("idle");
+    setCopyNearState("idle");
+  }
+
+  function applyParsedRows(data: RawPayment[]) {
+    const parsedPayments = data
+      .map((row, index) => parseRawPayment(row, index))
+      .filter((row) => row.name || row.wallet || row.amount > 0);
+
+    if (parsedPayments.length === 0) {
+      setParseError(
+        "No valid rows found. Expected headers: name, wallet, amount, currency, payout_rail, test_tx_required.",
+      );
+      setPayments([]);
+      return;
+    }
+
+    setPayments(parsedPayments);
   }
 
   function setTestTxDone(paymentId: string, done: boolean) {
@@ -222,6 +259,7 @@ export function usePayroll() {
     validationErrors,
     pendingTests,
     handleCsvUpload,
+    handleLoadSampleCsv,
     setTestTxDone,
     handleGeneratePayroll,
     handleCopyZipUri,

@@ -6,6 +6,7 @@ export function UploadStep({
   parseError,
   canContinue,
   onUpload,
+  onLoadSample,
   onBack,
   onContinue,
 }: {
@@ -13,6 +14,7 @@ export function UploadStep({
   parseError: string;
   canContinue: boolean;
   onUpload: (event: ChangeEvent<HTMLInputElement>) => void;
+  onLoadSample: () => void;
   onBack: () => void;
   onContinue: () => void;
 }) {
@@ -36,6 +38,15 @@ export function UploadStep({
             className="w-full max-w-[240px] text-xs text-gray-500 file:mr-3 file:cursor-pointer file:rounded-full file:border-0 file:bg-black file:px-4 file:py-2 file:text-xs file:font-medium file:text-white"
           />
         </label>
+        <div className="mt-2">
+          <button
+            type="button"
+            onClick={onLoadSample}
+            className="rounded-full border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50"
+          >
+            Load Sample CSV
+          </button>
+        </div>
 
         {fileName && <p className="mt-3 text-sm text-gray-700">File: {fileName}</p>}
         {parseError && <p className="mt-2 text-sm text-red-600">{parseError}</p>}

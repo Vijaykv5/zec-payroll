@@ -26,6 +26,7 @@ export default function Home() {
     validationErrors,
     pendingTests,
     handleCsvUpload,
+    handleLoadSampleCsv,
     setTestTxDone,
     handleGeneratePayroll,
     handleCopyZipUri,
@@ -34,8 +35,8 @@ export default function Home() {
   } = usePayroll();
 
   return (
-    <main className="min-h-screen bg-gray-100 px-3 py-6">
-      <div className="mx-auto flex min-h-[calc(100vh-3rem)] w-full max-w-4xl flex-col items-center justify-center transition-all duration-200">
+    <main className="min-h-screen bg-gradient-to-b from-gray-100 to-gray-200 px-4 py-8">
+      <div className="mx-auto flex min-h-[calc(100vh-3rem)] w-full max-w-5xl flex-col items-center justify-center transition-all duration-200">
         <div className="w-full max-w-3xl">
           {step === "landing" && <LandingStep onStart={() => setStep("upload")} />}
 
@@ -45,6 +46,9 @@ export default function Home() {
               parseError={parseError}
               canContinue={payments.length > 0}
               onUpload={handleCsvUpload}
+              onLoadSample={() => {
+                void handleLoadSampleCsv();
+              }}
               onBack={() => setStep("landing")}
               onContinue={() => setStep("preview")}
             />
