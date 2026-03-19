@@ -82,8 +82,11 @@ export function validatePayments(payments: Payment[]): string[] {
         return `Row ${index + 1}: amount must be greater than 0.`;
       }
 
-      if (payment.payoutRail === "ZEC" && !payment.wallet.startsWith("zs")) {
-        return `Row ${index + 1}: shielded wallet must start with \"zs\" for ZEC payouts.`;
+      if (
+        payment.payoutRail === "ZEC" &&
+        !(payment.wallet.startsWith("zs") || payment.wallet.startsWith("u"))
+      ) {
+        return `Row ${index + 1}: wallet must start with \"zs\" (shielded) or \"u\" (unified) for ZEC payouts.`;
       }
 
       if (payment.payoutRail === "USDC_NEAR_INTENT" && payment.wallet.length < 2) {

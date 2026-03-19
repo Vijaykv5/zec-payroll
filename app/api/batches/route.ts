@@ -1,10 +1,6 @@
-import { randomUUID } from "node:crypto";
-import { promises as fs } from "node:fs";
-import path from "node:path";
 import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
 import type { EncryptedBatchRecord, EncryptedPayload } from "@/types/payroll";
-
-const STORE_PATH = path.join(process.cwd(), "data", "encrypted-batches.json");
 
 type CreateBatchBody = {
   encrypted: EncryptedPayload;
@@ -12,20 +8,6 @@ type CreateBatchBody = {
   nextPayoutDate: string;
   notificationDue: boolean;
 };
-
-async function readStore(): Promise<EncryptedBatchRecord[]> {
-  try {
-    const content = await fs.readFile(STORE_PATH, "utf8");
-    return JSON.parse(content) as EncryptedBatchRecord[];
-  } catch {
-    return [];
-  }
-}
-
-async function writeStore(records: EncryptedBatchRecord[]): Promise<void> {
-  await fs.mkdir(path.dirname(STORE_PATH), { recursive: true });
-  await fs.writeFile(STORE_PATH, JSON.stringify(records, null, 2), "utf8");
-}
 
 function isEncryptedPayload(value: unknown): value is EncryptedPayload {
   if (!value || typeof value !== "object") {
@@ -42,9 +24,42 @@ function isEncryptedPayload(value: unknown): value is EncryptedPayload {
   );
 }
 
+function toRecord(row: {
+  id: string;
+  createdAt: Date;
+  nextPayoutDate: string;
+  notificationDue: boolean;
+  ciphertext: string;
+  iv: string;
+  salt: string;
+  algorithm: string;
+  kdf: string;
+}): EncryptedBatchRecord {
+  return {
+    id: row.id,
+    createdAt: row.createdAt.toISOString(),
+    nextPayoutDate: row.nextPayoutDate,
+    notificationDue: row.notificationDue,
+    encrypted: {
+      ciphertext: row.ciphertext,
+      iv: row.iv,
+      salt: row.salt,
+      algorithm: row.algorithm as "AES-GCM",
+      kdf: row.kdf as "PBKDF2",
+    },
+  };
+}
+
 export async function GET() {
-  const records = await readStore();
-  return NextResponse.json({ records });
+  const rows = await prisma.encryptedBatch.findMany({
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+
+  return NextResponse.json({
+    records: rows.map(toRecord),
+  });
 }
 
 export async function POST(request: Request) {
@@ -58,17 +73,23 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid batch metadata." }, { status: 400 });
   }
 
-  const record: EncryptedBatchRecord = {
-    id: randomUUID(),
-    encrypted: body.encrypted,
-    createdAt: body.createdAt,
-    nextPayoutDate: body.nextPayoutDate,
-    notificationDue: Boolean(body.notificationDue),
-  };
+  const createdAt = new Date(body.createdAt);
+  if (Number.isNaN(createdAt.getTime())) {
+    return NextResponse.json({ error: "Invalid createdAt timestamp." }, { status: 400 });
+  }
 
-  const records = await readStore();
-  records.unshift(record);
-  await writeStore(records);
+  const row = await prisma.encryptedBatch.create({
+    data: {
+      createdAt,
+      nextPayoutDate: body.nextPayoutDate,
+      notificationDue: Boolean(body.notificationDue),
+      ciphertext: body.encrypted.ciphertext,
+      iv: body.encrypted.iv,
+      salt: body.encrypted.salt,
+      algorithm: body.encrypted.algorithm,
+      kdf: body.encrypted.kdf,
+    },
+  });
 
-  return NextResponse.json({ ok: true, record });
+  return NextResponse.json({ ok: true, record: toRecord(row) });
 }

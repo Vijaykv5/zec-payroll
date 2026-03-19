@@ -14,6 +14,8 @@ It supports:
 
 ```bash
 npm install
+npm run prisma:generate
+npm run prisma:migrate
 npm run dev
 ```
 
@@ -44,9 +46,21 @@ Carol,carol.near,200,USDC,USDC_NEAR_INTENT,false
 
 - Client derives AES-GCM key from your passphrase using PBKDF2.
 - Client encrypts payroll batch JSON before uploading.
-- Server stores only encrypted payload (`ciphertext`, `iv`, `salt`) + minimal metadata (`createdAt`, `nextPayoutDate`, `notificationDue`).
+- Server stores only encrypted payload (`ciphertext`, `iv`, `salt`) + minimal metadata (`createdAt`, `nextPayoutDate`, `notificationDue`) in PostgreSQL.
 
-Encrypted records are persisted at `data/encrypted-batches.json` for demo purposes.
+## Database (Neon + Prisma)
+
+- Connection env vars: `DATABASE_URL` (used by Prisma) and `DB_URL` (kept for compatibility).
+- Prisma schema: `prisma/schema.prisma`
+- Migration files: `prisma/migrations/*`
+- API persistence layer: `app/api/batches/route.ts`
+
+Useful commands:
+
+```bash
+npm run prisma:generate
+npm run prisma:migrate
+```
 
 ## Notes
 
