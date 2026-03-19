@@ -153,20 +153,30 @@ export function buildNearIntentTransfers(payments: Payment[]): NearIntentTransfe
 }
 
 export function generateZip321(payments: Payment[]): string {
-  const params = payments
+  const zipPayments = payments
     .filter((payment) => payment.payoutRail === "ZEC")
-    .map((payment) => {
-      const zecAmount = convertToZec(payment.amount, payment.currency);
-      const memo = `Payroll ${payment.name}`;
-      return `address=${encodeURIComponent(payment.wallet)}&amount=${zecAmount.toFixed(8)}&memo=${encodeURIComponent(memo)}`;
-    })
-    .join("&");
+    .map((payment) => ({
+      address: payment.wallet,
+      amount: convertToZec(payment.amount, payment.currency).toFixed(8),
+    }));
 
-  if (!params) {
+  if (zipPayments.length === 0) {
     return "";
   }
 
-  return `zcash:?${params}`;
+  const first = zipPayments[0];
+  const params = [
+    `amount=${encodeURIComponent(first.amount)}`,
+    ...zipPayments.slice(1).flatMap((payment, idx) => {
+      const suffix = `.${idx + 1}`;
+      return [
+        `address${suffix}=${encodeURIComponent(payment.address)}`,
+        `amount${suffix}=${encodeURIComponent(payment.amount)}`,
+      ];
+    }),
+  ].join("&");
+
+  return `zcash:${encodeURIComponent(first.address)}?${params}`;
 }
 
 export function generateBatch(payments: Payment[], settings: PayrollSettings): GeneratedBatch {
@@ -202,8 +212,24 @@ export function maskZip321Uri(uri: string): string {
     return "";
   }
 
-  return uri.replace(/address=([^&]+)/g, (_match, encodedAddress: string) => {
-    const decoded = decodeURIComponent(encodedAddress);
-    return `address=${encodeURIComponent(maskAddress(decoded))}`;
+  const withMaskedPathAddress = uri.replace(/^zcash:([^?]+)\?/, (_match, rawPathAddress: string) => {
+    let decoded = rawPathAddress;
+    try {
+      decoded = decodeURIComponent(rawPathAddress);
+    } catch {
+      decoded = rawPathAddress;
+    }
+    return `zcash:${maskAddress(decoded)}?`;
+  });
+
+  return withMaskedPathAddress.replace(/address(\.\d+)?=([^&]+)/g, (_match, suffix: string | undefined, rawAddress: string) => {
+    let decoded = rawAddress;
+    try {
+      decoded = decodeURIComponent(rawAddress);
+    } catch {
+      decoded = rawAddress;
+    }
+    const masked = maskAddress(decoded);
+    return `address${suffix ?? ""}=${masked}`;
   });
 }
