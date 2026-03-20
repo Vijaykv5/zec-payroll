@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
-import type { CopyState, EncryptedBatchRecord, GeneratedBatch } from "@/types/payroll";
-import { maskZip321Uri } from "@/utils/payroll";
+import type { CopyState, EncryptedBatchRecord, GeneratedBatch, Payment } from "@/types/payroll";
+import { generateIndividualZecUris, maskZip321Uri } from "@/utils/payroll";
 import { PrimaryButton, SecondaryButton, SummaryCard } from "./ui";
 
 function CopyNotice({ state }: { state: CopyState }) {
@@ -18,6 +18,7 @@ export function ResultStep({
   batch,
   copyZipState,
   copyNearState,
+  payments,
   records,
   activeRecordId,
   selectedRecord,
@@ -30,12 +31,14 @@ export function ResultStep({
   onSelectRecord,
   onPaidTxidChange,
   onMarkPaid,
+  onNewBatch,
   onOpenZip,
   onOpenNear,
 }: {
   batch: GeneratedBatch;
   copyZipState: CopyState;
   copyNearState: CopyState;
+  payments: Payment[];
   records: EncryptedBatchRecord[];
   activeRecordId: string;
   selectedRecord: EncryptedBatchRecord | null;
@@ -48,13 +51,18 @@ export function ResultStep({
   onSelectRecord: (recordId: string) => void;
   onPaidTxidChange: (value: string) => void;
   onMarkPaid: () => void;
+  onNewBatch: () => void;
   onOpenZip: () => void;
   onOpenNear: () => void;
 }) {
+  const [zecUriMode, setZecUriMode] = useState<"single" | "batch">("batch");
   const [zipView, setZipView] = useState<"qr" | "uri">("qr");
+  const individualUris = generateIndividualZecUris(payments);
   const activeRecord = selectedRecord;
   const activeTxid = activeRecord?.txid;
   const zecExplorerLink = activeTxid ? `https://blockchair.com/zcash/transaction/${activeTxid}` : "";
+  const isPending = activeRecord?.payoutStatus !== "paid";
+  const isOverdue = Boolean(batch.notificationOverdue);
 
   return (
     <section className="w-full space-y-3 transition-all duration-200">
@@ -71,9 +79,16 @@ export function ResultStep({
 
         <div className="mt-3 rounded-lg border border-[var(--line)] bg-[#f7faf5] p-2.5">
           <p className="text-xs text-[var(--ink-2)]">
-            Notification status: {batch.notificationDue ? "Due now" : "Not due yet"}
+            Notification status: {isOverdue ? "Overdue" : batch.notificationDue ? "Due now" : "Not due yet"}
           </p>
         </div>
+        {isOverdue && isPending ? (
+          <div className="mt-2 rounded-lg border border-amber-300 bg-amber-50 p-2.5">
+            <p className="text-xs font-semibold text-amber-800">
+              Overdue: payout date has passed and this batch is still pending. Execute payment or mark it paid now.
+            </p>
+          </div>
+        ) : null}
       </div>
 
       <div className="soft-panel rounded-2xl p-4">
@@ -82,49 +97,101 @@ export function ResultStep({
           <div className="inline-flex rounded-md border border-[var(--line)] bg-[#f4f8f2] p-0.5 text-xs">
             <button
               type="button"
-              onClick={() => setZipView("qr")}
-              className={`rounded px-2 py-1 ${zipView === "qr" ? "bg-[var(--accent)] text-white" : "text-[var(--ink-1)]"}`}
+              onClick={() => setZecUriMode("single")}
+              className={`rounded px-2 py-1 ${zecUriMode === "single" ? "bg-[var(--accent)] text-white" : "text-[var(--ink-1)]"}`}
             >
-              QR
+              One at a time
             </button>
             <button
               type="button"
-              onClick={() => setZipView("uri")}
-              className={`rounded px-2 py-1 ${zipView === "uri" ? "bg-[var(--accent)] text-white" : "text-[var(--ink-1)]"}`}
+              onClick={() => setZecUriMode("batch")}
+              className={`rounded px-2 py-1 ${zecUriMode === "batch" ? "bg-[var(--accent)] text-white" : "text-[var(--ink-1)]"}`}
             >
-              URI
+              Batch URIs ({batch.zecRecipients} batch)
             </button>
           </div>
         </div>
-        <div className="mt-2 rounded-lg border border-[var(--line)] bg-[#f7faf5] p-3">
-          {zipView === "qr" ? (
-            <div className="flex flex-col items-center gap-2">
-              {batch.zcashUri ? (
-                <div className="rounded-md bg-white p-2">
-                  <QRCodeSVG value={batch.zcashUri} size={208} marginSize={1} />
+
+        {zecUriMode === "batch" ? (
+          <>
+            <div className="mt-2 flex justify-end">
+              <div className="inline-flex rounded-md border border-[var(--line)] bg-[#f4f8f2] p-0.5 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setZipView("qr")}
+                  className={`rounded px-2 py-1 ${zipView === "qr" ? "bg-[var(--accent)] text-white" : "text-[var(--ink-1)]"}`}
+                >
+                  QR
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setZipView("uri")}
+                  className={`rounded px-2 py-1 ${zipView === "uri" ? "bg-[var(--accent)] text-white" : "text-[var(--ink-1)]"}`}
+                >
+                  URI
+                </button>
+              </div>
+            </div>
+            <div className="mt-2 rounded-lg border border-[var(--line)] bg-[#f7faf5] p-3">
+              {zipView === "qr" ? (
+                <div className="flex flex-col items-center gap-2">
+                  {batch.zcashUri ? (
+                    <div className="rounded-md bg-white p-2">
+                      <QRCodeSVG value={batch.zcashUri} size={208} marginSize={1} />
+                    </div>
+                  ) : (
+                    <p className="text-xs text-[var(--ink-2)]">QR unavailable for this batch.</p>
+                  )}
+                  <p className="w-full break-all font-mono text-[11px] text-[var(--ink-1)]">{maskZip321Uri(batch.zcashUri)}</p>
                 </div>
               ) : (
-                <p className="text-xs text-[var(--ink-2)]">QR unavailable for this batch.</p>
+                <textarea
+                  readOnly
+                  value={maskZip321Uri(batch.zcashUri)}
+                  className="h-28 w-full rounded-lg border border-[var(--line)] bg-white p-2 font-mono text-xs text-[var(--ink-0)]"
+                />
               )}
-              <p className="w-full break-all font-mono text-[11px] text-[var(--ink-1)]">{maskZip321Uri(batch.zcashUri)}</p>
             </div>
-          ) : (
-            <textarea
-              readOnly
-              value={maskZip321Uri(batch.zcashUri)}
-              className="h-28 w-full rounded-lg border border-[var(--line)] bg-white p-2 font-mono text-xs text-[var(--ink-0)]"
-            />
-          )}
-        </div>
-        <CopyNotice state={copyZipState} />
-        <div className="mt-2 flex flex-wrap gap-2">
-          <PrimaryButton onClick={onCopyZip} disabled={!batch.zcashUri}>
-            Copy ZIP-321
-          </PrimaryButton>
-          {/* <PrimaryButton onClick={onOpenZip} disabled={!batch.zcashUri}>
-            Open in Zodl
-          </PrimaryButton> */}
-        </div>
+            <CopyNotice state={copyZipState} />
+            <div className="mt-2 flex flex-wrap gap-2">
+              <PrimaryButton onClick={onCopyZip} disabled={!batch.zcashUri}>
+                Copy ZIP-321
+              </PrimaryButton>
+            </div>
+          </>
+        ) : (
+          <div className="mt-2 space-y-3">
+            {individualUris.length === 0 ? (
+              <p className="text-xs text-[var(--ink-2)]">No ZEC recipients in this batch.</p>
+            ) : (
+              individualUris.map((item, index) => (
+                <div key={item.id} className="rounded-xl border border-[var(--line)] bg-[#f7faf5] p-3">
+                  <div className="grid gap-3 lg:grid-cols-[190px_1fr]">
+                    <div className="flex items-center justify-center rounded-md bg-white p-2">
+                      <QRCodeSVG value={item.uri} size={168} marginSize={1} />
+                    </div>
+                    <div className="space-y-2">
+                      <p className="text-sm font-semibold text-[var(--ink-0)]">
+                        #{index + 1} {item.name || "Recipient"}
+                      </p>
+                      <p className="text-xs text-[var(--ink-2)]">
+                        Amount: <span className="font-semibold text-[var(--ink-1)]">{item.amountZec.toFixed(8)} ZEC</span>
+                      </p>
+                      <p className="text-xs text-[var(--ink-2)]">
+                        Description: <span className="font-semibold text-[var(--ink-1)]">{item.description || "-"}</span>
+                      </p>
+                      <textarea
+                        readOnly
+                        value={item.uri}
+                        className="h-20 w-full rounded-lg border border-[var(--line)] bg-white p-2 font-mono text-xs text-[var(--ink-0)]"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
       </div>
 
       <div className="soft-panel rounded-2xl p-4">
@@ -227,6 +294,7 @@ export function ResultStep({
 
       <div className="flex gap-3">
         <SecondaryButton onClick={onBack}>Back</SecondaryButton>
+        <PrimaryButton onClick={onNewBatch}>Generate New Batch</PrimaryButton>
       </div>
     </section>
   );

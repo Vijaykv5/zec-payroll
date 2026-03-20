@@ -5,7 +5,6 @@ import { PrimaryButton, SecondaryButton, SummaryCard } from "./ui";
 export function PreviewStep({
   payments,
   settings,
-  passphrase,
   errors,
   pendingTests,
   generationError,
@@ -13,13 +12,11 @@ export function PreviewStep({
   isSaving,
   onBack,
   onGenerate,
-  onSetPassphrase,
   onUpdateSettings,
   onToggleTestTx,
 }: {
   payments: Payment[];
   settings: PayrollSettings;
-  passphrase: string;
   errors: string[];
   pendingTests: boolean;
   generationError: string;
@@ -27,7 +24,6 @@ export function PreviewStep({
   isSaving: boolean;
   onBack: () => void;
   onGenerate: () => void;
-  onSetPassphrase: (value: string) => void;
   onUpdateSettings: (next: PayrollSettings) => void;
   onToggleTestTx: (paymentId: string, checked: boolean) => void;
 }) {
@@ -82,16 +78,9 @@ export function PreviewStep({
           </label>
         </div>
 
-        <label className="mt-2 block space-y-1 text-xs text-[var(--ink-2)]">
-          Encryption passphrase (not sent to server)
-          <input
-            type="password"
-            value={passphrase}
-            onChange={(event) => onSetPassphrase(event.target.value)}
-            className="w-full rounded-lg border border-[var(--line)] bg-white px-2.5 py-1.5 text-xs text-[var(--ink-0)]"
-            placeholder="At least 8 characters"
-          />
-        </label>
+        <div className="mt-2 rounded-lg border border-[var(--line)] bg-[#f7faf5] p-2 text-xs text-[var(--ink-1)]">
+          Vault unlocked. This browser passphrase will be used for encryption.
+        </div>
 
         <p className="mt-1 text-xs text-[var(--ink-2)]">
           Every row with test transactions enabled must be marked done before full payout batch generation.

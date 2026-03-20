@@ -15,8 +15,13 @@ const bodyMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ZEC Payroll Runner",
-  description: "Biweekly shielded payroll prototype with ZIP-321 and encrypted server storage.",
+  title: "Cloaked",
+  description: "Private payroll runner with encrypted browser vaults, batch payouts, and execution history.",
+  icons: {
+    icon: "/favicon.png",
+    shortcut: "/favicon.png",
+    apple: "/favicon.png",
+  },
 };
 
 export default function RootLayout({

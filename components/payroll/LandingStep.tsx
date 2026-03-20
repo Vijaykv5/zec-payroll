@@ -67,7 +67,7 @@ export function LandingStep({ onStart }: { onStart: () => void }) {
   return (
     <section className="w-full space-y-5 text-center transition-all duration-200">
       <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--ink-2)]">Private team payouts</p>
-      <h1 className="text-4xl font-semibold tracking-tight text-[var(--ink-0)] sm:text-5xl">Shielded Payroll Runner</h1>
+      <h1 className="text-4xl font-semibold tracking-tight text-[var(--ink-0)] sm:text-5xl">Cloaked</h1>
       {mounted && priceLabel ? (
         <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-[var(--line)] bg-white/90 px-4 py-2 text-sm font-semibold text-[var(--ink-1)] shadow-sm backdrop-blur">
           <Image src="/logo.webp" alt="ZEC logo" width={16} height={16} className="rounded-full" />

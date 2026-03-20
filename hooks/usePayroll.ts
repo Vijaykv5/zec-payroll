@@ -3,15 +3,18 @@ import type { ChangeEvent } from "react";
 import Papa from "papaparse";
 import type {
   CopyState,
+  Currency,
   EncryptedBatchRecord,
+  EncryptedPayload,
   GeneratedBatch,
   Payment,
   PayrollSettings,
   RawPayment,
   Step,
 } from "@/types/payroll";
-import { encryptJson } from "@/utils/crypto";
+import { decryptJson, encryptJson } from "@/utils/crypto";
 import {
+  convertToZec,
   generateBatch,
   hasPendingTestTransactions,
   parseRawPayment,
@@ -24,6 +27,7 @@ const DEFAULT_SETTINGS: PayrollSettings = {
 };
 
 const PAYOUT_STATUS_STORAGE_KEY = "zecpayroll:payout-status:v1";
+const LOCAL_VAULT_KEY = "zecpayroll:vault:v1";
 
 type PaidStatusMap = Record<string, { txid: string; paidAt: string }>;
 
@@ -76,6 +80,41 @@ function applyPaidStatus(records: EncryptedBatchRecord[]): EncryptedBatchRecord[
   });
 }
 
+function hasLocalVault(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  return Boolean(window.localStorage.getItem(LOCAL_VAULT_KEY));
+}
+
+function readLocalVault(): EncryptedPayload | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  try {
+    const raw = window.localStorage.getItem(LOCAL_VAULT_KEY);
+    if (!raw) {
+      return null;
+    }
+    const parsed = JSON.parse(raw) as Partial<EncryptedPayload>;
+    if (!parsed || typeof parsed !== "object") {
+      return null;
+    }
+    if (
+      typeof parsed.ciphertext !== "string" ||
+      typeof parsed.iv !== "string" ||
+      typeof parsed.salt !== "string" ||
+      parsed.algorithm !== "AES-GCM" ||
+      parsed.kdf !== "PBKDF2"
+    ) {
+      return null;
+    }
+    return parsed as EncryptedPayload;
+  } catch {
+    return null;
+  }
+}
+
 export function usePayroll() {
   const [step, setStep] = useState<Step>("landing");
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -93,12 +132,19 @@ export function usePayroll() {
   const [paidTxid, setPaidTxid] = useState("");
   const [markPaidError, setMarkPaidError] = useState("");
   const [markPaidSuccess, setMarkPaidSuccess] = useState("");
+  const [vaultModalOpen, setVaultModalOpen] = useState(false);
+  const [vaultMode, setVaultMode] = useState<"create" | "unlock">("create");
+  const [vaultError, setVaultError] = useState("");
 
   const validationErrors = useMemo(() => validatePayments(payments), [payments]);
   const pendingTests = useMemo(() => hasPendingTestTransactions(payments), [payments]);
 
   useEffect(() => {
     void fetchSavedRecords();
+  }, []);
+
+  useEffect(() => {
+    setVaultMode(hasLocalVault() ? "unlock" : "create");
   }, []);
 
   useEffect(() => {
@@ -186,6 +232,119 @@ export function usePayroll() {
     setMarkPaidSuccess("");
   }
 
+  function handleStartPayroll() {
+    setVaultError("");
+    setVaultMode(hasLocalVault() ? "unlock" : "create");
+    setVaultModalOpen(true);
+  }
+
+  function closeVaultModal() {
+    setVaultError("");
+    setVaultModalOpen(false);
+  }
+
+  async function createVault(passphraseValue: string, confirmPassphrase: string) {
+    setVaultError("");
+
+    if (!passphraseValue || passphraseValue.length < 8) {
+      setVaultError("Passphrase must be at least 8 characters.");
+      return;
+    }
+
+    if (passphraseValue !== confirmPassphrase) {
+      setVaultError("Passphrase confirmation does not match.");
+      return;
+    }
+
+    try {
+      const payload = await encryptJson(
+        {
+          scope: "payroll-vault",
+          createdAt: new Date().toISOString(),
+        },
+        passphraseValue,
+      );
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(LOCAL_VAULT_KEY, JSON.stringify(payload));
+      }
+      setPassphrase(passphraseValue);
+      setVaultModalOpen(false);
+      setStep("upload");
+    } catch {
+      setVaultError("Could not create vault in this browser.");
+    }
+  }
+
+  async function unlockVault(passphraseValue: string) {
+    setVaultError("");
+
+    if (!passphraseValue) {
+      setVaultError("Enter your passphrase.");
+      return;
+    }
+
+    const payload = readLocalVault();
+    if (!payload) {
+      setVaultError("No encrypted vault found in this browser.");
+      setVaultMode("create");
+      return;
+    }
+
+    try {
+      const decoded = await decryptJson<{ scope?: string }>(payload, passphraseValue);
+      if (decoded.scope !== "payroll-vault") {
+        setVaultError("Vault format is invalid.");
+        return;
+      }
+
+      let openedExistingBatch = false;
+      try {
+        const response = await fetch("/api/batches", { cache: "no-store" });
+        if (response.ok) {
+          const payload = (await response.json()) as { records?: EncryptedBatchRecord[] };
+          const records = applyPaidStatus(payload.records ?? []);
+          setSavedRecords(records);
+          if (records.length > 0) {
+            const latest = records[0];
+            const restored = await decryptJson<{
+              settings?: PayrollSettings;
+              payments?: Payment[];
+              batch?: GeneratedBatch;
+            }>(latest.encrypted, passphraseValue);
+
+            if (restored.settings && Array.isArray(restored.payments) && restored.batch) {
+              setSettings(restored.settings);
+              setPayments(restored.payments);
+              setBatch(restored.batch);
+              setActiveRecordId(latest.id);
+              setStep("result");
+              openedExistingBatch = true;
+            }
+          }
+        }
+      } catch {
+        // If restore fails, continue to normal upload flow.
+      }
+
+      setPassphrase(passphraseValue);
+      setVaultModalOpen(false);
+      if (!openedExistingBatch) {
+        setStep("upload");
+      }
+    } catch {
+      setVaultError("Incorrect passphrase.");
+    }
+  }
+
+  function forgotPassphrase() {
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem(LOCAL_VAULT_KEY);
+    }
+    setPassphrase("");
+    setVaultError("");
+    setVaultMode("create");
+  }
+
   function applyParsedRows(data: RawPayment[]) {
     const parsedPayments = data
       .map((row, index) => parseRawPayment(row, index))
@@ -202,6 +361,48 @@ export function usePayroll() {
     setPayments(parsedPayments);
   }
 
+  function addManualEmployee(input: {
+    name: string;
+    wallet: string;
+    amount: number;
+    currency: Currency;
+  }): boolean {
+    const name = input.name.trim();
+    const wallet = input.wallet.trim();
+    const amount = Number(input.amount);
+
+    if (!name) {
+      setParseError("Employee name is required.");
+      return false;
+    }
+    if (!wallet) {
+      setParseError("Recipient address is required.");
+      return false;
+    }
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setParseError("Amount must be greater than 0.");
+      return false;
+    }
+
+    const id = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `manual-${Date.now()}`;
+    const payoutRail = input.currency === "USDC" ? "USDC_NEAR_INTENT" : "ZEC";
+
+    const nextPayment: Payment = {
+      id,
+      name,
+      wallet,
+      amount,
+      currency: input.currency,
+      payoutRail,
+      testTxRequired: true,
+      testTxDone: false,
+    };
+
+    setPayments((current) => [...current, nextPayment]);
+    setParseError("");
+    return true;
+  }
+
   function setTestTxDone(paymentId: string, done: boolean) {
     setPayments((current) =>
       current.map((payment) => {
@@ -214,6 +415,10 @@ export function usePayroll() {
         };
       }),
     );
+  }
+
+  function removeEmployee(paymentId: string) {
+    setPayments((current) => current.filter((payment) => payment.id !== paymentId));
   }
 
   async function handleGeneratePayroll() {
@@ -279,6 +484,31 @@ export function usePayroll() {
         setPaidTxid("");
         setMarkPaidError("");
         setMarkPaidSuccess("");
+
+        const zecItems = payments
+          .filter((payment) => payment.payoutRail === "ZEC")
+          .map((payment) => ({
+            recipientName: payment.name,
+            recipientAddress: payment.wallet,
+            amountZec: convertToZec(payment.amount, payment.currency),
+          }));
+
+        if (zecItems.length > 0) {
+          try {
+            await fetch("/api/executions", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                batchId: enrichedRecord.id,
+                items: zecItems,
+              }),
+            });
+          } catch {
+            // Keep generation successful even if history logging fails.
+          }
+        }
       }
 
       setBatch(generatedBatch);
@@ -369,6 +599,19 @@ export function usePayroll() {
     setMarkPaidSuccess("Batch marked paid.");
   }
 
+  function startNewBatch() {
+    setBatch(null);
+    setPayments([]);
+    setFileName("");
+    setParseError("");
+    setGenerationError("");
+    setCopyZipState("idle");
+    setCopyNearState("idle");
+    setMarkPaidError("");
+    setMarkPaidSuccess("");
+    setStep("upload");
+  }
+
   return {
     step,
     setStep,
@@ -381,10 +624,11 @@ export function usePayroll() {
     copyNearState,
     settings,
     setSettings,
-    passphrase,
-    setPassphrase,
     savedRecords,
     isSaving,
+    vaultModalOpen,
+    vaultMode,
+    vaultError,
     activeRecordId,
     setActiveRecordId,
     paidTxid,
@@ -396,11 +640,19 @@ export function usePayroll() {
     pendingTests,
     handleCsvUpload,
     handleLoadSampleCsv,
+    addManualEmployee,
     setTestTxDone,
+    removeEmployee,
+    handleStartPayroll,
+    closeVaultModal,
+    createVault,
+    unlockVault,
+    forgotPassphrase,
     handleGeneratePayroll,
     handleCopyZipUri,
     handleCopyNearIntent,
     markRecordPaid,
+    startNewBatch,
     resetCopyState: () => {
       setCopyZipState("idle");
       setCopyNearState("idle");

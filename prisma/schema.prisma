@@ -21,6 +21,26 @@ model EncryptedBatch {
   salt            String
   algorithm       String
   kdf             String
+  executions      PayoutExecution[]
 
   @@map("encrypted_batches")
+}
+
+model PayoutExecution {
+  id               String   @id @default(uuid())
+  batchId          String   @map("batch_id")
+  recipientName    String   @map("recipient_name")
+  recipientAddress String   @map("recipient_address")
+  amountZec        Float    @map("amount_zec")
+  status           String   @default("PENDING")
+  txid             String?
+  paidAt           DateTime? @map("paid_at")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  batch EncryptedBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([batchId])
+  @@map("payout_executions")
 }

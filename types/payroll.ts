@@ -47,6 +47,7 @@ export type GeneratedBatch = {
   usdcRecipients: number;
   nextPayoutDate: string;
   notificationDue: boolean;
+  notificationOverdue: boolean;
 };
 
 export type EncryptedPayload = {
@@ -66,4 +67,19 @@ export type EncryptedBatchRecord = {
   payoutStatus?: "pending" | "paid";
   txid?: string;
   paidAt?: string;
+};
+
+export type ExecutionStatus = "PENDING" | "PAID" | "FAILED";
+
+export type PayoutExecution = {
+  id: string;
+  batchId: string;
+  recipientName: string;
+  recipientAddress: string;
+  amountZec: number;
+  status: ExecutionStatus;
+  txid: string | null;
+  paidAt: string | null;
+  createdAt: string;
+  updatedAt: string;
 };

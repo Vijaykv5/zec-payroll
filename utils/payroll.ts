@@ -29,6 +29,15 @@ function memoToBase64url(memo: string): string {
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
+export type IndividualZecUri = {
+  id: string;
+  name: string;
+  address: string;
+  amountZec: number;
+  description: string;
+  uri: string;
+};
+
 function parseCurrency(value: string | undefined): Currency {
   const normalized = value?.trim().toUpperCase();
   if (normalized === "USD" || normalized === "USDC") {
@@ -160,6 +169,20 @@ export function isNotificationDue(nextPayoutDate: string, referenceDate = new Da
   return today >= payoutDay;
 }
 
+export function isNotificationOverdue(nextPayoutDate: string, referenceDate = new Date()): boolean {
+  if (!nextPayoutDate) {
+    return false;
+  }
+  const payoutDay = new Date(`${nextPayoutDate}T00:00:00`);
+  if (Number.isNaN(payoutDay.getTime())) {
+    return false;
+  }
+
+  const today = new Date(referenceDate);
+  today.setHours(0, 0, 0, 0);
+  return today > payoutDay;
+}
+
 export function buildNearIntentTransfers(payments: Payment[]): NearIntentTransfer[] {
   return payments
     .filter((payment) => payment.payoutRail === "USDC_NEAR_INTENT")
@@ -200,6 +223,29 @@ export function generateZip321(payments: Payment[]): string {
   return `zcash:${encodeURIComponent(first.address)}?${params}`;
 }
 
+export function generateIndividualZecUris(payments: Payment[]): IndividualZecUri[] {
+  return payments
+    .filter((payment) => payment.payoutRail === "ZEC")
+    .map((payment) => {
+      const amount = convertToZec(payment.amount, payment.currency);
+      const amountText = amount.toFixed(8);
+      const description = payment.name ? `Payroll ${payment.name}` : "";
+      const queryParams = [
+        `amount=${encodeURIComponent(amountText)}`,
+        ...(description ? [`memo=${memoToBase64url(description)}`] : []),
+      ].join("&");
+
+      return {
+        id: payment.id,
+        name: payment.name,
+        address: payment.wallet,
+        amountZec: amount,
+        description,
+        uri: `zcash:${encodeURIComponent(payment.wallet)}?${queryParams}`,
+      };
+    });
+}
+
 export function generateBatch(payments: Payment[], settings: PayrollSettings): GeneratedBatch {
   const nearTransfers = buildNearIntentTransfers(payments);
   const nearIntentJson = JSON.stringify({ chain: "near", asset: "USDC", transfers: nearTransfers }, null, 2);
@@ -215,6 +261,7 @@ export function generateBatch(payments: Payment[], settings: PayrollSettings): G
     usdcRecipients: nearTransfers.length,
     nextPayoutDate,
     notificationDue: isNotificationDue(nextPayoutDate),
+    notificationOverdue: isNotificationOverdue(nextPayoutDate),
   };
 }
 

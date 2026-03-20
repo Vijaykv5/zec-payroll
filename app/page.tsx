@@ -1,9 +1,9 @@
 "use client";
-
 import { LandingStep } from "@/components/payroll/LandingStep";
 import { PreviewStep } from "@/components/payroll/PreviewStep";
 import { ResultStep } from "@/components/payroll/ResultStep";
 import { UploadStep } from "@/components/payroll/UploadStep";
+import { VaultModal } from "@/components/payroll/VaultModal";
 import { usePayroll } from "@/hooks/usePayroll";
 
 export default function Home() {
@@ -19,10 +19,11 @@ export default function Home() {
     copyNearState,
     settings,
     setSettings,
-    passphrase,
-    setPassphrase,
     savedRecords,
     isSaving,
+    vaultModalOpen,
+    vaultMode,
+    vaultError,
     activeRecordId,
     setActiveRecordId,
     paidTxid,
@@ -34,11 +35,19 @@ export default function Home() {
     pendingTests,
     handleCsvUpload,
     handleLoadSampleCsv,
+    addManualEmployee,
     setTestTxDone,
+    removeEmployee,
+    handleStartPayroll,
+    closeVaultModal,
+    createVault,
+    unlockVault,
+    forgotPassphrase,
     handleGeneratePayroll,
     handleCopyZipUri,
     handleCopyNearIntent,
     markRecordPaid,
+    startNewBatch,
     resetCopyState,
   } = usePayroll();
   const shellClassName =
@@ -59,20 +68,23 @@ export default function Home() {
 
       <div className="mx-auto flex min-h-[calc(100vh-3rem)] w-full max-w-5xl flex-col items-center justify-center transition-all duration-200">
         <div className={shellClassName}>
-          {/* <p className="mb-4 px-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--ink-2)]">
-            ZEC Payroll Runner
-          </p> */}
-          {step === "landing" && <LandingStep onStart={() => setStep("upload")} />}
+          <div className="mb-4 flex items-center justify-between px-3">
+            {/* <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--ink-2)]">ZEC Payroll Runner</p> */}
+          </div>
+          {step === "landing" && <LandingStep onStart={handleStartPayroll} />}
 
           {step === "upload" && (
             <UploadStep
               fileName={fileName}
+              payments={payments}
               parseError={parseError}
               canContinue={payments.length > 0}
               onUpload={handleCsvUpload}
               onLoadSample={() => {
                 void handleLoadSampleCsv();
               }}
+              onAddManualEmployee={addManualEmployee}
+              onRemoveEmployee={removeEmployee}
               onBack={() => setStep("landing")}
               onContinue={() => setStep("preview")}
             />
@@ -82,7 +94,6 @@ export default function Home() {
             <PreviewStep
               payments={payments}
               settings={settings}
-              passphrase={passphrase}
               errors={validationErrors}
               pendingTests={pendingTests}
               generationError={generationError}
@@ -92,7 +103,6 @@ export default function Home() {
               onGenerate={() => {
                 void handleGeneratePayroll();
               }}
-              onSetPassphrase={setPassphrase}
               onUpdateSettings={setSettings}
               onToggleTestTx={setTestTxDone}
             />
@@ -103,6 +113,7 @@ export default function Home() {
               batch={batch}
               copyZipState={copyZipState}
               copyNearState={copyNearState}
+              payments={payments}
               records={savedRecords}
               activeRecordId={activeRecordId}
               selectedRecord={selectedRecord}
@@ -122,6 +133,7 @@ export default function Home() {
               onSelectRecord={setActiveRecordId}
               onPaidTxidChange={setPaidTxid}
               onMarkPaid={markRecordPaid}
+              onNewBatch={startNewBatch}
               onOpenZip={() => {
                 if (batch.zcashUri) {
                   window.location.href = batch.zcashUri;
@@ -136,6 +148,15 @@ export default function Home() {
           )}
         </div>
       </div>
+      <VaultModal
+        open={vaultModalOpen}
+        mode={vaultMode}
+        error={vaultError}
+        onClose={closeVaultModal}
+        onCreateVault={createVault}
+        onUnlockVault={unlockVault}
+        onForgotPassphrase={forgotPassphrase}
+      />
     </main>
   );
 }
